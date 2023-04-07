@@ -1,0 +1,84 @@
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+url = 'https://www.sklad-generator.ru/elektrostancii/atlas-copco/'
+
+# Отправляем GET-запрос на страницу
+
+response = requests.get(url)
+if response.status_code == 200:
+    print('Запрос успешно выполнен')
+else:
+    print(f'Ошибка {response.status_code} при выполнении запроса')
+
+# Создаем объект beautifulsoup и передаем ему содержимое страницы
+
+soup = BeautifulSoup(response.content, 'html.parser')
+if soup.find('div', {'class': 'product__title'}) is not None:
+    print('Страница успешно обработана')
+else:
+    print('Возникла ошибка при обработке страницы')
+
+# Находим все товарные карточки на странице с помощью класса
+products_titles = soup.find_all('div', {'class': 'product__title'})
+
+# Список ссылок на страницы с товарами
+product_links = []
+
+# Проходим по всем товарам на странице и собираем ссылки
+for product_title in products_titles:
+    # Находим ссылку на страницу товара
+    product_link = product_title.find('a', {'class': 'product__title-link'})
+
+    # Если ссылка найдена, записываем ее в список
+    if product_link is not None:
+        abs_link = urljoin(url, product_link['href'])
+        product_links.append(abs_link)
+
+# Теперь у нас есть список ссылок на все товары на странице, и мы можем перейти на каждую страницу и получить данные о товаре
+
+# Создаем файл, в который будем записывать результаты
+with open('products.txt', 'a') as f:
+    # Перебираем ссылки на все товары, полученные ранее
+    for link in product_links:
+        # Отправляем GET-запрос на страницу товара
+        response = requests.get(link)
+
+        # Создаем объект soup для страницы товара
+        product_soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Получаем необходимые данные о товаре и записываем в файл
+        name_elem = product_soup.find('h1', {'class': 'content__header'})
+        if name_elem is None:
+            print(f'Элемент с классом "product-name" не найден на странице {link}!')
+        else:
+            name = name_elem.text.strip()
+            print(f'Название товара: {name}')
+
+            # Получаем описание товара
+            desc_elem = product_soup.find('div', {'class': 'product-card__tabs-content'})
+            if desc_elem is None:
+                print(f'Описания товара не найдено на странице {link}')
+            else:
+                desc = desc_elem.text.strip()
+                print(f'Описание товара: {desc}')
+
+            # Получаем ссылку на фото товара
+            product_card_elem = product_soup.find('div', {'class': 'product-card'})
+            if product_card_elem is None:
+                print(f'Блок товара не найден на странице {link}')
+            else:
+                img_elem = product_card_elem.find('img')
+                if img_elem is None:
+                    print(f'Фото товара не найдено на странице {link}')
+                else:
+                    src = img_elem['data-src']
+                    abs_src = urljoin(url, src)
+                    print(f'Фото товара: {abs_src}')
+
+            # Записываем данные в файл
+            f.write(f'Название товара: {name}\n')
+            f.write(f'Описание товара: {desc}\n')
+            f.write(f'Фото товара: {abs_src}\n')
+            print(f'Товар "{name}" записан в файл')
